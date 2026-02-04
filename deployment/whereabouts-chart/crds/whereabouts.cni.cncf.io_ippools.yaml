@@ -48,11 +48,20 @@ spec:
                       type: string
                     ifname:
                       type: string
+                    persistIP:
+                      type: boolean
                     podref:
+                      type: string
+                    vmNetwork:
+                      type: string
+                    vmref:
                       type: string
                   required:
                   - id
+                  - persistIP
                   - podref
+                  - vmNetwork
+                  - vmref
                   type: object
                 description: |-
                   Allocations is the set of allocated IPs for the given range. Its` indices are a direct mapping to the

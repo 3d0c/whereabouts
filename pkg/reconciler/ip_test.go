@@ -17,7 +17,9 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	k8sclient "k8s.io/client-go/kubernetes"
 	fakek8sclient "k8s.io/client-go/kubernetes/fake"
 
@@ -43,6 +45,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 	var (
 		reconcileLooper *ReconcileLooper
 		k8sClientSet    k8sclient.Interface
+		dynClient       *dynamicfake.FakeDynamicClient
 	)
 
 	Context("reconciling IP pools with a single running pod", func() {
@@ -50,7 +53,22 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 
 		BeforeEach(func() {
 			pod = generatePod(namespace, podName, ipInNetwork{ip: firstIPInRange, networkName: networkName})
-			k8sClientSet = fakek8sclient.NewSimpleClientset(pod)
+			k8sClientSet = fakek8sclient.NewClientset(pod)
+			k8sClientSet = fakek8sclient.NewClientset(pod)
+			vm := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "kubevirt.io/v1",
+					"kind":       "VirtualMachine",
+					"metadata": map[string]interface{}{
+						"name":      "test-vm",
+						"namespace": "default",
+					},
+					"status": map[string]interface{}{
+						"printableStatus": "Running",
+					},
+				},
+			}
+			dynClient = dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), vm)
 		})
 
 		Context("with IP from a single IPPool", func() {
@@ -74,7 +92,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 				Context("reconciling the IPPool", func() {
 					BeforeEach(func() {
 						var err error
-						reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet))
+						reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet, dynClient))
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -112,7 +130,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 					networkName: networkName,
 				})
 				if i == livePodIndex {
-					k8sClientSet = fakek8sclient.NewSimpleClientset(pod)
+					k8sClientSet = fakek8sclient.NewClientset(pod)
 				}
 				pods = append(pods, *pod)
 			}
@@ -138,7 +156,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 			Context("reconciling the IPPool", func() {
 				BeforeEach(func() {
 					var err error
-					reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet))
+					reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet, dynClient))
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -173,7 +191,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 
 		It("verifies that the correct entry is cleaned up", func() {
 			pod = generatePod(namespace, podName, ipInNetwork{ip: firstIPInRange, networkName: networkName})
-			k8sClientSet = fakek8sclient.NewSimpleClientset(pod)
+			k8sClientSet = fakek8sclient.NewClientset(pod)
 
 			By("creating an IP pool with 2 entries from the same pod. Second entry was initially assigned to the pod")
 			pool := generateIPPoolSpec(ipRange, namespace, podName)
@@ -189,7 +207,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 
 			By("initializing the reconciler")
 			var err error
-			reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet))
+			reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet, dynClient))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("reconciling and checking that the correct entry is deleted")
@@ -248,7 +266,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 				})
 				pods = append(pods, pod)
 			}
-			k8sClientSet = fakek8sclient.NewSimpleClientset(wrapToRuntimeObject(pods...)...)
+			k8sClientSet = fakek8sclient.NewClientset(wrapToRuntimeObject(pods...)...)
 		})
 
 		BeforeEach(func() {
@@ -271,7 +289,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 
 		It("will delete an orphaned IP address", func() {
 			Expect(k8sClientSet.CoreV1().Pods(namespace).Delete(context.TODO(), pods[podIndexToRemove].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
-			newReconciler, err := NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet))
+			newReconciler, err := NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet, dynClient))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newReconciler.ReconcileOverlappingIPAddresses()).To(Succeed())
 
@@ -316,7 +334,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 				})
 				pods = append(pods, pod)
 			}
-			k8sClientSet = fakek8sclient.NewSimpleClientset(wrapToRuntimeObject(pods...)...)
+			k8sClientSet = fakek8sclient.NewClientset(wrapToRuntimeObject(pods...)...)
 		})
 
 		BeforeEach(func() {
@@ -337,7 +355,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 		})
 
 		It("will not delete an IP address that isn't orphaned after running reconciler", func() {
-			newReconciler, err := NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet))
+			newReconciler, err := NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet, dynClient))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newReconciler.ReconcileOverlappingIPAddresses()).To(Succeed())
 
@@ -368,7 +386,7 @@ var _ = Describe("Whereabouts IP reconciler", func() {
 
 			pool = generateIPPoolSpec(ipRange, namespace, poolName, pod.Name)
 			wbClient = fakewbclient.NewSimpleClientset(pool)
-			reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet))
+			reconcileLooper, err = NewReconcileLooperWithClient(kubernetes.NewKubernetesClient(wbClient, k8sClientSet, dynClient))
 			Expect(err).NotTo(HaveOccurred())
 		})
 

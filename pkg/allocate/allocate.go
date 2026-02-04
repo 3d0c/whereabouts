@@ -23,25 +23,34 @@ func (a AssignmentError) Error() string {
 }
 
 // AssignIP assigns an IP using a range and a reserve list.
-func AssignIP(ipamConf types.RangeConfiguration, reservelist []types.IPReservation, containerID, podRef, ifName string) (net.IPNet, []types.IPReservation, error) {
-
+func AssignIP(ipamConf types.RangeConfiguration, reservelist []types.IPReservation, containerID, podRef, ifName, vmRef, vmNet string, persistIP bool) (net.IPNet, []types.IPReservation, error) {
 	// Setup the basics here.
 	_, ipnet, _ := net.ParseCIDR(ipamConf.Range)
 
 	// Verify if podRef and ifName have already an allocation.
 	for i, r := range reservelist {
+		if r.VMRef != "" && r.VMRef == vmRef && r.VMNetwork == vmNet && r.PersistIP {
+			logging.Debugf("IP: %s reserved for vmRef: %q/%s", r.IP.String(), vmRef, vmNet)
+			if r.PodRef != "" {
+				return net.IPNet{}, nil, fmt.Errorf("IP: %s allocated for vmRef: %q is in use by podRef: %q", r.IP.String(), vmRef, r.PodRef)
+			}
+			reservelist[i].ContainerID = containerID
+			reservelist[i].PodRef = podRef
+			reservelist[i].IfName = ifName
+			return net.IPNet{IP: r.IP, Mask: ipnet.Mask}, reservelist, nil
+		}
+
 		if r.PodRef == podRef && r.IfName == ifName {
 			logging.Debugf("IP already allocated for podRef: %q - ifName:%q - IP: %s", podRef, ifName, r.IP.String())
 			if r.ContainerID != containerID {
 				logging.Debugf("updating container ID: %q", containerID)
 				reservelist[i].ContainerID = containerID
 			}
-
 			return net.IPNet{IP: r.IP, Mask: ipnet.Mask}, reservelist, nil
 		}
 	}
 
-	newip, updatedreservelist, err := IterateForAssignment(*ipnet, ipamConf.RangeStart, ipamConf.RangeEnd, reservelist, ipamConf.OmitRanges, containerID, podRef, ifName)
+	newip, updatedreservelist, err := IterateForAssignment(*ipnet, ipamConf.RangeStart, ipamConf.RangeEnd, reservelist, ipamConf.OmitRanges, containerID, podRef, ifName, vmRef, vmNet, persistIP)
 	if err != nil {
 		return net.IPNet{}, nil, err
 	}
@@ -58,6 +67,18 @@ func DeallocateIP(reservelist []types.IPReservation, containerID, ifName string)
 	}
 
 	ip := reservelist[index].IP
+
+	if reservelist[index].VMRef != "" && reservelist[index].PersistIP {
+		if reservelist[index].PodRef == "" {
+			logging.Errorf("State mismatch. Deallocating unused IP: %s, allocated for VM: %s", ip, reservelist[index].VMRef)
+			return reservelist, nil
+		}
+		reservelist[index].ContainerID = ""
+		reservelist[index].PodRef = ""
+		reservelist[index].IfName = ""
+		return reservelist, ip
+	}
+
 	logging.Debugf("Deallocating given previously used IP: %v", ip.String())
 
 	return removeIdxFromSlice(reservelist, index), ip
@@ -83,7 +104,15 @@ func removeIdxFromSlice(s []types.IPReservation, i int) []types.IPReservation {
 // If rangeEnd is specified, it is respected if it lies within the ipnet and if it is >= rangeStart.
 // reserveList holds a list of reserved IPs.
 // excludeRanges holds a list of subnets to be excluded (meaning the full subnet, including the network and broadcast IP).
-func IterateForAssignment(ipnet net.IPNet, rangeStart net.IP, rangeEnd net.IP, reserveList []types.IPReservation, excludeRanges []string, containerID, podRef, ifName string) (net.IP, []types.IPReservation, error) {
+func IterateForAssignment(
+	ipnet net.IPNet,
+	rangeStart net.IP,
+	rangeEnd net.IP,
+	reserveList []types.IPReservation,
+	excludeRanges []string,
+	containerID, podRef, ifName, vmRef, vmNet string,
+	persistIP bool,
+) (net.IP, []types.IPReservation, error) {
 	// Get the valid range, delimited by the ipnet's first and last usable IP as well as the rangeStart and rangeEnd.
 	firstIP, lastIP, err := iphelpers.GetIPRange(ipnet, rangeStart, rangeEnd)
 	if err != nil {
@@ -123,8 +152,16 @@ func IterateForAssignment(ipnet net.IPNet, rangeStart net.IP, rangeEnd net.IP, r
 			continue
 		}
 		// Assign and reserve the IP and return.
-		logging.Debugf("Reserving IP: %q - container ID %q - podRef: %q - ifName: %q", ip.String(), containerID, podRef, ifName)
-		reserveList = append(reserveList, types.IPReservation{IP: ip, ContainerID: containerID, PodRef: podRef, IfName: ifName})
+		logging.Debugf("Reserving IP: %q - container ID %q - podRef: %q - ifName: %q, vmRef: %s, vmNet: %s", ip.String(), containerID, podRef, ifName, vmRef, vmNet)
+		reserveList = append(reserveList, types.IPReservation{
+			IP:          ip,
+			ContainerID: containerID,
+			PodRef:      podRef,
+			IfName:      ifName,
+			VMRef:       vmRef,
+			VMNetwork:   vmNet,
+			PersistIP:   persistIP,
+		})
 		return ip, reserveList, nil
 	}
 

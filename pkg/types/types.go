@@ -8,6 +8,7 @@ import (
 	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
+	"github.com/k8snetworkplumbingwg/whereabouts/pkg/logging"
 )
 
 // Datastore types
@@ -26,6 +27,7 @@ const (
 type Net struct {
 	Name       string      `json:"name"`
 	CNIVersion string      `json:"cniVersion"`
+	Args       Args        `json:"args"`
 	IPAM       *IPAMConfig `json:"ipam"`
 }
 
@@ -43,6 +45,10 @@ type RangeConfiguration struct {
 	Range      string   `json:"range"`
 	RangeStart net.IP   `json:"range_start,omitempty"`
 	RangeEnd   net.IP   `json:"range_end,omitempty"`
+}
+
+type Args struct {
+	CNIArgs CNIArgs `json:"cni"`
 }
 
 // IPAMConfig describes the expected json configuration for this plugin
@@ -72,7 +78,8 @@ type IPAMConfig struct {
 	ConfigurationPath        string           `json:"configuration_path"`
 	PodName                  string
 	PodNamespace             string
-	NetworkName              string `json:"network_name,omitempty"`
+	NetworkName              string  `json:"network_name,omitempty"`
+	CNIArgs                  CNIArgs `json:"cni-args"`
 }
 
 func (ic *IPAMConfig) UnmarshalJSON(data []byte) error {
@@ -192,12 +199,39 @@ type IPReservation struct {
 	IP          net.IP `json:"ip"`
 	ContainerID string `json:"id"`
 	PodRef      string `json:"podref"`
+	VMRef       string `json:"vmRef"`
+	VMNetwork   string `json:"vmNetwork"`
+	PersistIP   bool   `json:"persistIP"`
 	IfName      string `json:"ifName"`
 	IsAllocated bool
 }
 
 func (ir IPReservation) String() string {
 	return fmt.Sprintf("IP: %s is reserved for pod: %s", ir.IP.String(), ir.PodRef)
+}
+
+type CNIArgs struct {
+	LogicNetworkName string `json:"logicNetworkName"`
+	PersistIP        bool   `json:"persistIP"`
+}
+
+func (a *CNIArgs) UnmarshalJSON(data []byte) error {
+	type cniArgsAlias CNIArgs
+
+	var args cniArgsAlias
+
+	if err := json.Unmarshal(data, &args); err != nil {
+		return err
+	}
+
+	if args.PersistIP && args.LogicNetworkName == "" {
+		logging.Errorf("Warning! persistIP is true with empty logicNetworkName, resetting persistIP")
+		args.PersistIP = false
+	}
+
+	*a = (CNIArgs)(args)
+
+	return nil
 }
 
 const (

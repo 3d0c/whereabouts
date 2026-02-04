@@ -76,7 +76,7 @@ var _ = Describe("IPControlLoop", func() {
 		BeforeEach(func() {
 			pod = podSpec(podName, namespace, nodeName, networkName)
 			node = nodeSpec(nodeName)
-			k8sClient = fakek8sclient.NewSimpleClientset(pod, node)
+			k8sClient = fakek8sclient.NewClientset(pod, node)
 			os.Setenv("NODENAME", nodeName)
 		})
 

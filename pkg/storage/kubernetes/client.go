@@ -6,6 +6,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,6 +24,7 @@ const listRequestTimeout = 30 * time.Second
 type Client struct {
 	client    wbclient.Interface
 	clientSet kubernetes.Interface
+	dynamic   dynamic.Interface
 	retries   int
 }
 
@@ -38,7 +41,6 @@ func NewClientViaKubeconfig(kubeconfigPath string) (*Client, error) {
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
 		&clientcmd.ConfigOverrides{}).ClientConfig()
-
 	if err != nil {
 		return nil, err
 	}
@@ -57,13 +59,19 @@ func newClient(config *rest.Config) (*Client, error) {
 		return nil, err
 	}
 
-	return NewKubernetesClient(c, clientSet), nil
+	dyn, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewKubernetesClient(c, clientSet, dyn), nil
 }
 
-func NewKubernetesClient(k8sClient wbclient.Interface, k8sClientSet kubernetes.Interface) *Client {
+func NewKubernetesClient(k8sClient wbclient.Interface, k8sClientSet kubernetes.Interface, dyn dynamic.Interface) *Client {
 	return &Client{
 		client:    k8sClient,
 		clientSet: k8sClientSet,
+		dynamic:   dyn,
 		retries:   storage.DatastoreRetries,
 	}
 }
@@ -104,6 +112,41 @@ func (i *Client) ListPods() ([]v1.Pod, error) {
 	}
 
 	return podList.Items, nil
+}
+
+type VMmap map[string]struct{}
+
+func (m VMmap) Has(vmRef string) bool {
+	_, ok := m[vmRef]
+	return ok
+}
+
+func (i *Client) ListVMs() (VMmap, error) {
+	vmMap := make(VMmap, 0)
+
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), storage.RequestTimeout)
+	defer cancel()
+
+	vmGVR := schema.GroupVersionResource{
+		Group:    "kubevirt.io",
+		Version:  "v1",
+		Resource: "virtualmachines",
+	}
+
+	vmList, err := i.dynamic.
+		Resource(vmGVR).
+		Namespace(metav1.NamespaceAll).
+		List(ctxWithTimeout, metav1.ListOptions{})
+	if err != nil {
+		logging.Errorf("Error getting virtual machines list: %s, ignoring this cause persisten IP for VM is optional", err)
+		return vmMap, nil
+	}
+
+	for _, vm := range vmList.Items {
+		vmMap[vm.GetNamespace()+"/"+vm.GetName()] = struct{}{}
+	}
+
+	return vmMap, nil
 }
 
 func (i *Client) GetPod(namespace, name string) (*v1.Pod, error) {

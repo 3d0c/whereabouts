@@ -175,7 +175,7 @@ func newNode(name string) *v1.Node {
 
 func (f *fixture) newController(ctx context.Context) (*Controller, informers.SharedInformerFactory, kubeinformers.SharedInformerFactory, nadinformers.SharedInformerFactory) {
 	f.whereaboutsclient = fake.NewSimpleClientset(f.whereaboutsObjects...)
-	f.kubeclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
+	f.kubeclient = k8sfake.NewClientset(f.kubeobjects...)
 	f.nadClient = k8snetplumbersv1fake.NewSimpleClientset()
 	// We have to manually Create the resources in the tracker for nad because
 	// k8s.io/client-go/testing/fixture.go uses meta.UnsafeGuessKindToResource(gvk) to convert gvk to gvr
