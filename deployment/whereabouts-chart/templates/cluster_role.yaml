@@ -54,3 +54,12 @@ rules:
   - patch
   - update
   - get
+- apiGroups: ["kubevirt.io"]
+  resources:
+    - virtualmachines
+    - virtualmachineinstances
+    - virtualmachineinstancemigrations
+  verbs:
+    - get
+    - list
+    - watch  

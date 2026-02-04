@@ -18,7 +18,6 @@ func TestAllocate(t *testing.T) {
 
 var _ = Describe("Allocation operations", func() {
 	It("can IterateForAssignment on an IPv4 address", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("192.168.1.1/24")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -27,14 +26,12 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		var exrange []string
-		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fmt.Sprint(newip)).To(Equal("192.168.1.1"))
-
 	})
 
 	It("can IterateForAssignment on an IPv6 address when the first hextet has NO leading zeroes", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("caa5::0/112")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -43,14 +40,12 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		var exrange []string
-		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fmt.Sprint(newip)).To(Equal("caa5::1"))
-
 	})
 
 	It("can IterateForAssignment on an IPv6 address when the first hextet has ALL leading zeroes", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("::1/126")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -59,16 +54,14 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		var exrange []string
-		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fmt.Sprint(newip)).To(Equal("::1"))
-
 	})
 
 	//
 
 	It("can IterateForAssignment on an IPv6 address when the first hextet has TWO leading zeroes", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("fd::1/116")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -77,14 +70,12 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		var exrange []string
-		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fmt.Sprint(newip)).To(Equal("fd::1"))
-
 	})
 
 	It("can IterateForAssignment on an IPv6 address when the first hextet has leading zeroes", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("100::2:1/126")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -93,13 +84,12 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		var exrange []string
-		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fmt.Sprint(newip)).To(Equal("100::2:1"))
 	})
 
 	It("can IterateForAssignment on an IPv4 address excluding a range", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("192.168.0.0/29")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -108,9 +98,8 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"192.168.0.0/30"}
-		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(fmt.Sprint(newip)).To(Equal("192.168.0.4"))
-
 	})
 
 	It("can IterateForAssignment on an IPv4 address excluding a range which is a single IP", func() {
@@ -122,7 +111,7 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"192.168.0.1"}
-		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, err := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fmt.Sprint(newip)).To(Equal("192.168.0.2"))
 	})
@@ -136,12 +125,11 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"192.168.0.1/123"}
-		_, _, err = IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		_, _, err = IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).To(MatchError(HavePrefix("could not parse exclude range")))
 	})
 
 	It("can IterateForAssignment on an IPv6 address excluding a range", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("100::2:1/125")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -150,9 +138,8 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"100::2:1/126"}
-		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(fmt.Sprint(newip)).To(Equal("100::2:4"))
-
 	})
 
 	It("can IterateForAssignment on an IPv6 address excluding a range which is a single IP", func() {
@@ -164,7 +151,7 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"100::2:1"}
-		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(fmt.Sprint(newip)).To(Equal("100::2:2"))
 	})
 
@@ -177,12 +164,11 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"100::2::1"}
-		_, _, err = IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		_, _, err = IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).To(MatchError(HavePrefix("could not parse exclude range")))
 	})
 
 	It("can IterateForAssignment on an IPv6 address excluding a very large range", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("2001:db8::/30")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -191,13 +177,11 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"2001:db8::0/32"}
-		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(fmt.Sprint(newip)).To(Equal("2001:db9::"))
-
 	})
 
 	It("can IterateForAssignment on an IPv4 address excluding unsorted ranges", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("192.168.0.0/28")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -206,16 +190,15 @@ var _ = Describe("Allocation operations", func() {
 
 		var ipres []types.IPReservation
 		exrange := []string{"192.168.0.0/30", "192.168.0.6/31", "192.168.0.8/31", "192.168.0.4/30"}
-		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, _ := IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(fmt.Sprint(newip)).To(Equal("192.168.0.10"))
 
 		exrange = []string{"192.168.0.0/30", "192.168.0.14/31", "192.168.0.4/30", "192.168.0.6/31", "192.168.0.8/31"}
-		newip, _, _ = IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "")
+		newip, _, _ = IterateForAssignment(*ipnet, calculatedrangestart, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(fmt.Sprint(newip)).To(Equal("192.168.0.10"))
 	})
 
 	It("can IterateForAssignment on an IPv4 address excluding a range and respect the requested range", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("192.168.0.0/29")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -234,12 +217,10 @@ var _ = Describe("Allocation operations", func() {
 			},
 		}
 		exrange := []string{"192.168.0.0/30"}
-		_, _, err = IterateForAssignment(*ipnet, firstip, nil, ipres, exrange, "0xdeadbeef", "", "")
+		_, _, err = IterateForAssignment(*ipnet, firstip, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).To(MatchError(HavePrefix("Could not allocate IP in range")))
-
 	})
 	It("can IterateForAssignment on an IPv4 address excluding the last allocatable IP and respect the requested range", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("192.168.0.0/29")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -258,13 +239,11 @@ var _ = Describe("Allocation operations", func() {
 			},
 		}
 		exrange := []string{"192.168.0.4/30"}
-		_, _, err = IterateForAssignment(*ipnet, firstip, nil, ipres, exrange, "0xdeadbeef", "", "")
+		_, _, err = IterateForAssignment(*ipnet, firstip, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).To(MatchError(HavePrefix("Could not allocate IP in range")))
-
 	})
 
 	It("can IterateForAssignment on an IPv6 address excluding a range and respect the requested range", func() {
-
 		firstip, ipnet, err := net.ParseCIDR("100::2:1/125")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -284,9 +263,8 @@ var _ = Describe("Allocation operations", func() {
 		}
 
 		exrange := []string{"100::2:4/126"}
-		_, _, err = IterateForAssignment(*ipnet, firstip, nil, ipres, exrange, "0xdeadbeef", "", "")
+		_, _, err = IterateForAssignment(*ipnet, firstip, nil, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).To(MatchError(HavePrefix("Could not allocate IP in range")))
-
 	})
 
 	// Make sure that the network IP and the broadcast IP are excluded from the range.
@@ -297,7 +275,7 @@ var _ = Describe("Allocation operations", func() {
 			_, ipnet, err := net.ParseCIDR("192.168.0.0/29")
 			Expect(err).NotTo(HaveOccurred())
 			rangeStart := net.ParseIP("192.168.0.0") // Network address, out of bounds.
-			newip, _, err := IterateForAssignment(*ipnet, rangeStart, nil, nil, nil, "0xdeadbeef", "", "")
+			newip, _, err := IterateForAssignment(*ipnet, rangeStart, nil, nil, nil, "0xdeadbeef", "", "", "", "", false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fmt.Sprint(newip)).To(Equal("192.168.0.1"))
 		})
@@ -309,7 +287,7 @@ var _ = Describe("Allocation operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 			rangeStart := net.ParseIP("192.168.0.0") // Network address, out of bounds.
 			rangeEnd := net.ParseIP("192.168.0.8")   // Broadcast address, out of bounds.
-			newip, _, err := IterateForAssignment(*ipnet, rangeStart, rangeEnd, nil, nil, "0xdeadbeef", "", "")
+			newip, _, err := IterateForAssignment(*ipnet, rangeStart, rangeEnd, nil, nil, "0xdeadbeef", "", "", "", "", false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fmt.Sprint(newip)).To(Equal("192.168.0.1"))
 		})
@@ -337,7 +315,7 @@ var _ = Describe("Allocation operations", func() {
 			},
 		}
 		exrange := []string{"192.168.0.4/30"}
-		_, _, err = IterateForAssignment(*ipnet, startip, lastip, ipres, exrange, "0xdeadbeef", "", "")
+		_, _, err = IterateForAssignment(*ipnet, startip, lastip, ipres, exrange, "0xdeadbeef", "", "", "", "", false)
 		Expect(err).To(MatchError(HavePrefix("Could not allocate IP in range")))
 	})
 
@@ -350,7 +328,7 @@ var _ = Describe("Allocation operations", func() {
 				lastip := net.ParseIP("192.168.0.6")
 
 				ipres := []types.IPReservation{}
-				_, ipres, err = IterateForAssignment(*ipnet, startip, lastip, ipres, nil, "0xdeadbeef", "dummy-0", "")
+				_, ipres, err = IterateForAssignment(*ipnet, startip, lastip, ipres, nil, "0xdeadbeef", "dummy-0", "", "", "", false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(ipres)).To(Equal(1))
 				Expect(fmt.Sprint(ipres[0].IP)).To(Equal("192.168.0.1"))
@@ -379,7 +357,7 @@ var _ = Describe("Allocation operations", func() {
 					},
 				}
 
-				_, ipres, err = IterateForAssignment(*ipnet, startip, lastip, ipres, nil, "0xdeadbeef", "dummy-0", "")
+				_, ipres, err = IterateForAssignment(*ipnet, startip, lastip, ipres, nil, "0xdeadbeef", "dummy-0", "", "", "", false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(ipres)).To(Equal(4))
 				Expect(fmt.Sprint(ipres[3].IP)).To(Equal("192.168.0.4"))
@@ -408,7 +386,7 @@ var _ = Describe("Allocation operations", func() {
 					},
 				}
 
-				_, ipres, err = IterateForAssignment(*ipnet, startip, lastip, ipres, nil, "0xdeadbeef", "dummy-0", "")
+				_, ipres, err = IterateForAssignment(*ipnet, startip, lastip, ipres, nil, "0xdeadbeef", "dummy-0", "", "", "", false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(ipres)).To(Equal(4))
 				Expect(fmt.Sprint(ipres[3].IP)).To(Equal("192.168.0.3"))

@@ -251,7 +251,15 @@ func toIPReservationList(allocations map[string]whereaboutsv1alpha1.IPAllocation
 			continue
 		}
 		ip := iphelpers.IPAddOffset(firstip, uint64(numOffset))
-		reservelist = append(reservelist, whereaboutstypes.IPReservation{IP: ip, ContainerID: a.ContainerID, PodRef: a.PodRef, IfName: a.IfName})
+		reservelist = append(reservelist, whereaboutstypes.IPReservation{
+			IP:          ip,
+			ContainerID: a.ContainerID,
+			PodRef:      a.PodRef,
+			IfName:      a.IfName,
+			VMRef:       a.VMRef,
+			VMNetwork:   a.VMNetowrk,
+			PersistIP:   a.PersistIP,
+		})
 	}
 	return reservelist
 }
@@ -263,7 +271,14 @@ func toAllocationMap(reservelist []whereaboutstypes.IPReservation, firstip net.I
 		if err != nil {
 			return nil, err
 		}
-		allocations[fmt.Sprintf("%d", index)] = whereaboutsv1alpha1.IPAllocation{ContainerID: r.ContainerID, PodRef: r.PodRef, IfName: r.IfName}
+		allocations[fmt.Sprintf("%d", index)] = whereaboutsv1alpha1.IPAllocation{
+			ContainerID: r.ContainerID,
+			PodRef:      r.PodRef,
+			IfName:      r.IfName,
+			VMRef:       r.VMRef,
+			VMNetowrk:   r.VMNetwork,
+			PersistIP:   r.PersistIP,
+		}
 	}
 	return allocations, nil
 }
@@ -283,7 +298,8 @@ func (i *KubernetesIPAM) GetOverlappingRangeStore() (storage.OverlappingRangeSto
 // ranges. First return value is true if the IP is allocated, second return value is true if the IP is allocated to the
 // current podRef
 func (c *KubernetesOverlappingRangeStore) GetOverlappingRangeIPReservation(ctx context.Context, ip net.IP,
-	podRef, networkName string) (*whereaboutsv1alpha1.OverlappingRangeIPReservation, error) {
+	podRef, networkName string,
+) (*whereaboutsv1alpha1.OverlappingRangeIPReservation, error) {
 	normalizedIP := NormalizeIP(ip, networkName)
 
 	logging.Debugf("Get overlappingRangewide allocation; normalized IP: %q, IP: %q, networkName: %q",
@@ -304,8 +320,12 @@ func (c *KubernetesOverlappingRangeStore) GetOverlappingRangeIPReservation(ctx c
 }
 
 // UpdateOverlappingRangeAllocation updates clusterwide allocation for overlapping ranges.
-func (c *KubernetesOverlappingRangeStore) UpdateOverlappingRangeAllocation(ctx context.Context, mode int, ip net.IP,
-	podRef, ifName, networkName string) error {
+func (c *KubernetesOverlappingRangeStore) UpdateOverlappingRangeAllocation(
+	ctx context.Context,
+	mode int,
+	ip net.IP,
+	podRef, ifName, networkName string,
+) error {
 	normalizedIP := NormalizeIP(ip, networkName)
 
 	clusteripres := &whereaboutsv1alpha1.OverlappingRangeIPReservation{
@@ -357,7 +377,6 @@ func NormalizeIP(ip net.IP, networkName string) string {
 
 // getNodeName prefers an OS env var of NODENAME, or, uses a file named ./nodename in the whereabouts configuration path.
 func getNodeName(ipam *KubernetesIPAM) (string, error) {
-
 	envName := os.Getenv("NODENAME")
 	if envName != "" {
 		return strings.TrimSpace(envName), nil
@@ -391,7 +410,7 @@ func getNodeName(ipam *KubernetesIPAM) (string, error) {
 // newLeaderElector creates a new leaderelection.LeaderElector and associated
 // channels by which to observe elections and depositions.
 func newLeaderElector(ctx context.Context, clientset kubernetes.Interface, namespace string, ipamConf *KubernetesIPAM) (*leaderelection.LeaderElector, chan struct{}, chan struct{}) {
-	//log.WithField("context", "leaderelection")
+	// log.WithField("context", "leaderelection")
 	// leaderOK will block gRPC startup until it's closed.
 	leaderOK := make(chan struct{})
 	// deposed is closed by the leader election callback when
@@ -415,7 +434,7 @@ func newLeaderElector(ctx context.Context, clientset kubernetes.Interface, names
 	}
 	logging.Debugf("using lease with name: %v", leaseName)
 
-	var rl = &resourcelock.LeaseLock{
+	rl := &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
 			Name:      leaseName,
 			Namespace: namespace,
@@ -566,10 +585,25 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 		return newips, err
 	}
 
+	vmRef, srcPod, err := ipam.GetVMRef(ipamConf)
+	if err != nil {
+		logging.Errorf("Warning. Unable to get VM reference: %s. This affects only VM persist IP feature", err)
+	}
+	var (
+		isVMMigration = false
+		srcPodref     = ""
+	)
+	if vmRef != "" && srcPod != "" {
+		isVMMigration = true
+		srcPodref = ipamConf.PodNamespace + "/" + srcPod
+	}
+	logging.Debugf("vmRef: %s, srcPod: %s, srcPodref: %s, isVMMigration: %v", vmRef, srcPod, srcPodref, isVMMigration)
+
 	// handle the ip add/del until successful
 	var overlappingrangeallocations []whereaboutstypes.IPReservation
 	var ipforoverlappingrangeupdate net.IP
 	skipOverlappingRangeUpdate := false
+
 	for _, ipRange := range ipamConf.IPRanges {
 	RETRYLOOP:
 		for j := 0; j < storage.DatastoreRetries; j++ {
@@ -579,12 +613,15 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 			default:
 				// retry the IPAM loop if the context has not been cancelled
 			}
+
 			overlappingrangestore, err = ipam.GetOverlappingRangeStore()
 			if err != nil {
 				logging.Errorf("IPAM error getting OverlappingRangeStore: %v", err)
 				return newips, err
 			}
+
 			poolIdentifier := PoolIdentifier{IpRange: ipRange.Range, NetworkName: ipamConf.NetworkName}
+
 			if ipamConf.NodeSliceSize != "" {
 				hostname, err := getNodeName(ipam)
 				if err != nil {
@@ -594,6 +631,7 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 				poolIdentifier.NodeName = hostname
 				nodeSliceRange, err := GetNodeSlicePoolRange(ctx, ipam, hostname)
 				if err != nil {
+					logging.Errorf("Failed to get node slice pool range: %v", err)
 					return newips, err
 				}
 				_, ipNet, err := net.ParseCIDR(nodeSliceRange)
@@ -619,6 +657,7 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 				}
 			}
 			logging.Debugf("using pool identifier: %v", poolIdentifier)
+
 			pool, err = ipam.GetIPPool(requestCtx, poolIdentifier)
 			if err != nil {
 				logging.Errorf("IPAM error reading pool allocations (attempt: %d): %v", j, err)
@@ -630,10 +669,30 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 
 			reservelist := pool.Allocations()
 			reservelist = append(reservelist, overlappingrangeallocations...)
+
 			var updatedreservelist []whereaboutstypes.IPReservation
 			switch mode {
 			case whereaboutstypes.Allocate:
-				newip, updatedreservelist, err = allocate.AssignIP(ipRange, reservelist, ipam.ContainerID, ipamConf.GetPodRef(), ipam.IfName)
+				logging.Debugf("Assigning IP for ipRage: %v, reserverlist: %v, containerID: %v, podref: %v, ifname: %v, vmRef: %v, srcPod: %v, logicNetworkName: %v, persistIP: %v", ipRange,
+					reservelist,
+					ipam.ContainerID,
+					ipamConf.GetPodRef(),
+					ipam.IfName,
+					vmRef,
+					srcPodref,
+					ipamConf.CNIArgs.LogicNetworkName,
+					ipamConf.CNIArgs.PersistIP)
+				newip, updatedreservelist, err = allocate.AssignIP(
+					ipRange,
+					reservelist,
+					ipam.ContainerID,
+					ipamConf.GetPodRef(),
+					ipam.IfName,
+					vmRef,
+					srcPodref,
+					ipamConf.CNIArgs.LogicNetworkName,
+					ipamConf.CNIArgs.PersistIP,
+				)
 				if err != nil {
 					logging.Errorf("Error assigning IP: %v", err)
 					return newips, err
@@ -641,7 +700,7 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 				// Now check if this is allocated overlappingrange wide
 				// When it's allocated overlappingrange wide, we add it to a local reserved list
 				// And we try again.
-				if ipamConf.OverlappingRanges {
+				if ipamConf.OverlappingRanges && !isVMMigration {
 					overlappingRangeIPReservation, err := overlappingrangestore.GetOverlappingRangeIPReservation(requestCtx, newip.IP,
 						ipamConf.GetPodRef(), ipamConf.NetworkName)
 					if err != nil {
@@ -664,14 +723,20 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 				}
 
 			case whereaboutstypes.Deallocate:
-				updatedreservelist, ipforoverlappingrangeupdate = allocate.DeallocateIP(reservelist, ipam.ContainerID, ipam.IfName)
+				if isVMMigration {
+					break
+				}
+				updatedreservelist, ipforoverlappingrangeupdate = allocate.DeallocateIP(
+					reservelist,
+					ipam.ContainerID,
+					ipam.IfName,
+				)
 				if ipforoverlappingrangeupdate == nil {
 					// Do not fail if allocation was not found.
 					logging.Debugf("Failed to find allocation for container ID: %s", ipam.ContainerID)
 					return nil, nil
 				}
 			}
-
 			// Clean out any dummy records from the reservelist...
 			var usereservelist []whereaboutstypes.IPReservation
 			for _, rl := range updatedreservelist {
@@ -697,7 +762,10 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 		}
 
 		if ipamConf.OverlappingRanges {
-			if !skipOverlappingRangeUpdate {
+			// note, UpdateOverlappingRangeAllocation expects non nil ip, because
+			// it's verified above, but in migration case this step is skipped
+			// that is why !isVMMigration added here
+			if !skipOverlappingRangeUpdate && !isVMMigration {
 				err = overlappingrangestore.UpdateOverlappingRangeAllocation(requestCtx, mode, ipforoverlappingrangeupdate,
 					ipamConf.GetPodRef(), ipam.IfName, ipamConf.NetworkName)
 				if err != nil {
@@ -709,6 +777,7 @@ func IPManagementKubernetesUpdate(ctx context.Context, mode int, ipam *Kubernete
 
 		newips = append(newips, newip)
 	}
+	logging.Debugf("IPManagement finished with: %v, err: %v\n", newips, err)
 	return newips, err
 }
 

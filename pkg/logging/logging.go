@@ -36,9 +36,11 @@ const (
 	UnknownLevel
 )
 
-var loggingStderr bool
-var loggingFp *os.File
-var loggingLevel Level
+var (
+	loggingStderr bool
+	loggingFp     *os.File
+	loggingLevel  Level
+)
 
 const defaultTimestampFormat = time.RFC3339
 

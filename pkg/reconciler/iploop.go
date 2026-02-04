@@ -21,6 +21,7 @@ type ReconcileLooper struct {
 	liveWhereaboutsPods    map[string]podWrapper
 	orphanedIPs            []OrphanedIPReservations
 	orphanedClusterWideIPs []whereaboutsv1alpha1.OverlappingRangeIPReservation
+	vmMap                  kubernetes.VMmap
 }
 
 type OrphanedIPReservations struct {
@@ -48,10 +49,16 @@ func NewReconcileLooperWithClient(k8sClient *kubernetes.Client) (*ReconcileLoope
 		return nil, err
 	}
 
+	vmMap, err := k8sClient.ListVMs()
+	if err != nil {
+		return nil, err
+	}
+
 	whereaboutsPodRefs := getPodRefsServedByWhereabouts(ipPools)
 	looper := &ReconcileLooper{
 		k8sClient:           *k8sClient,
 		liveWhereaboutsPods: indexPods(pods, whereaboutsPodRefs),
+		vmMap:               vmMap,
 	}
 
 	if err := looper.findOrphanedIPsPerPool(ipPools); err != nil {
@@ -75,6 +82,11 @@ func (rl *ReconcileLooper) findOrphanedIPsPerPool(ipPools []storage.IPPool) erro
 				_ = logging.Errorf("pod ref missing for Allocations: %s", ipReservation)
 				continue
 			}
+			if ipReservation.VMRef != "" && rl.vmMap.Has(ipReservation.VMRef) {
+				logging.Debugf("is allocated to VM '%s', skipping", ipReservation.VMRef)
+				continue
+			}
+
 			if !rl.isOrphanedIP(ipReservation.PodRef, ipReservation.IP.String()) {
 				logging.Debugf("pod ref %s is not listed in the live pods list", ipReservation.PodRef)
 				orphanIP.Allocations = append(orphanIP.Allocations, ipReservation)

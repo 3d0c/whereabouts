@@ -34,7 +34,6 @@ func canonicalizeIP(ip *net.IP) error {
 // as `bytes`. At the moment values provided in envArgs are ignored so there
 // is no possibility to overload the json configuration using envArgs
 func LoadIPAMConfig(bytes []byte, envArgs string, extraConfigPaths ...string) (*types.IPAMConfig, string, error) {
-
 	var n types.Net
 	if err := json.Unmarshal(bytes, &n); err != nil {
 		return nil, "", fmt.Errorf("LoadIPAMConfig - JSON Parsing Error: %s / bytes: %s", err, bytes)
@@ -52,6 +51,8 @@ func LoadIPAMConfig(bytes []byte, envArgs string, extraConfigPaths ...string) (*
 	}
 	n.IPAM.PodName = string(args.K8S_POD_NAME)
 	n.IPAM.PodNamespace = string(args.K8S_POD_NAMESPACE)
+
+	n.IPAM.CNIArgs = n.Args.CNIArgs
 
 	flatipam, foundflatfile, err := GetFlatIPAM(false, n.IPAM, extraConfigPaths...)
 	if err != nil {
@@ -177,7 +178,6 @@ func pathExists(path string) bool {
 }
 
 func configureStatic(n *types.Net, args types.IPAMEnvArgs) error {
-
 	// Validate all ranges
 	numV4 := 0
 	numV6 := 0
@@ -220,7 +220,6 @@ func configureStatic(n *types.Net, args types.IPAMEnvArgs) error {
 	}
 
 	return nil
-
 }
 
 func GetFlatIPAM(isControlLoop bool, IPAM *types.IPAMConfig, extraConfigPaths ...string) (types.Net, string, error) {
@@ -265,7 +264,6 @@ func GetFlatIPAM(isControlLoop bool, IPAM *types.IPAMConfig, extraConfigPaths ..
 }
 
 func handleEnvArgs(n *types.Net, numV6 int, numV4 int, args types.IPAMEnvArgs) (int, int, error) {
-
 	if args.IP != "" {
 		for _, item := range strings.Split(string(args.IP), ",") {
 			ipstr := strings.TrimSpace(item)
@@ -303,7 +301,6 @@ func handleEnvArgs(n *types.Net, numV6 int, numV4 int, args types.IPAMEnvArgs) (
 	}
 
 	return numV6, numV4, nil
-
 }
 
 func LoadIPAMConfiguration(bytes []byte, envArgs string, extraConfigPaths ...string) (*types.IPAMConfig, error) {

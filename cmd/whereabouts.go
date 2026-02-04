@@ -18,6 +18,15 @@ import (
 )
 
 func cmdAddFunc(args *skel.CmdArgs) error {
+	logging.Debugf("cmdAddFunc(), %v, %v, %v, %v, %v, %v",
+		args.Args,
+		args.ContainerID,
+		args.IfName,
+		args.IfName,
+		args.NetnsOverride,
+		args.Path)
+	logging.Debugf("stdinData: %s\n", string(args.StdinData))
+
 	ipamConf, confVersion, err := config.LoadIPAMConfig(args.StdinData, args.Args)
 	if err != nil {
 		logging.Errorf("IPAM configuration load failed: %s", err)
@@ -35,6 +44,15 @@ func cmdAddFunc(args *skel.CmdArgs) error {
 }
 
 func cmdDelFunc(args *skel.CmdArgs) error {
+	logging.Debugf("cmdDelFunc(), %v, %v, %v, %v, %v, %v",
+		args.Args,
+		args.ContainerID,
+		args.IfName,
+		args.IfName,
+		args.NetnsOverride,
+		args.Path)
+	logging.Debugf("stdinData: %s\n", string(args.StdinData))
+
 	ipamConf, _, err := config.LoadIPAMConfig(args.StdinData, args.Args)
 	if err != nil {
 		logging.Errorf("IPAM configuration load failed: %s", err)
@@ -93,14 +111,16 @@ func cmdAdd(client *kubernetes.KubernetesIPAM, cniVersion string) error {
 	for _, newip := range newips {
 		result.IPs = append(result.IPs, &current.IPConfig{
 			Address: newip,
-			Gateway: client.Config.Gateway})
+			Gateway: client.Config.Gateway,
+		})
 	}
 
 	// Assign all the static IP elements.
 	for _, v := range client.Config.Addresses {
 		result.IPs = append(result.IPs, &current.IPConfig{
 			Address: v.Address,
-			Gateway: v.Gateway})
+			Gateway: v.Gateway,
+		})
 	}
 
 	return cnitypes.PrintResult(result, cniVersion)

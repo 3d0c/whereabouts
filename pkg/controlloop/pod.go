@@ -210,7 +210,6 @@ func (pc *PodController) garbageCollectPodIPs(pod *v1.Pod) error {
 		var pools []*whereaboutsv1alpha1.IPPool
 		for _, rangeConfig := range ipamConfig.IPRanges {
 			pool, err := pc.ipPool(wbclient.PoolIdentifier{IpRange: rangeConfig.Range, NetworkName: ipamConfig.NetworkName})
-
 			if err != nil {
 				return fmt.Errorf("failed to get the IPPool data: %+v", err)
 			}
@@ -222,6 +221,9 @@ func (pc *PodController) garbageCollectPodIPs(pod *v1.Pod) error {
 
 		for _, pool := range pools {
 			for allocationIndex, allocation := range pool.Spec.Allocations {
+				if allocation.PersistIP {
+					continue
+				}
 				if allocation.PodRef == podID(podNamespace, podName) {
 					logging.Verbosef("Found an existing allocation: %+v", allocation)
 
@@ -240,7 +242,7 @@ func (pc *PodController) garbageCollectPodIPs(pod *v1.Pod) error {
 
 					logging.Verbosef("stale allocation to cleanup: %+v", allocation)
 
-					client := *wbclient.NewKubernetesClient(pc.wbClient, pc.k8sClient)
+					client := *wbclient.NewKubernetesClient(pc.wbClient, pc.k8sClient, nil)
 					k8sIPAM := &wbclient.KubernetesIPAM{
 						Config:      *ipamConfig,
 						ContainerID: allocation.ContainerID,

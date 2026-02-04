@@ -25,6 +25,9 @@ type IPAllocation struct {
 	ContainerID string `json:"id"`
 	PodRef      string `json:"podref"`
 	IfName      string `json:"ifname,omitempty"`
+	VMRef       string `json:"vmref"`
+	VMNetowrk   string `json:"vmNetwork"`
+	PersistIP   bool   `json:"persistIP"`
 }
 
 // +genclient
